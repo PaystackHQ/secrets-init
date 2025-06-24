@@ -55,13 +55,7 @@ func (sp *SecretsProvider) ResolveSecrets(_ context.Context, vars []string) ([]s
 		kv := strings.Split(env, "=")
 		key, value := kv[0], kv[1]
 		if strings.HasPrefix(value, "arn:aws:secretsmanager") || strings.HasPrefix(value, "arn:aws-cn:secretsmanager") {
-			sk := strings.Split(value, "$")
-			value = sk[0]
-			nestedKey := ""
-
-			if len(sk) > 1 {
-				nestedKey = sk[1]
-			}
+			value, nestedKey, _ := strings.Cut(value, "$")
 
 			// get secret value
 			secret, err := sp.sm.GetSecretValue(&secretsmanager.GetSecretValueInput{SecretId: &value})
