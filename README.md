@@ -47,6 +47,8 @@ MY_DB_PASSWORD=very-secret-password
 
 For JSON secrets, you can extract specific nested values using the `$` syntax followed by [gjson](https://github.com/tidwall/gjson) path expressions:
 
+> **Note:** If your secret name contains multiple `$` characters, only the first `$` is used to split the secret ARN from the nested key path. For example, `arn:aws:secretsmanager:mysecret$level$key` will extract the key `level$key` from the secret named `arn:aws:secretsmanager:mysecret`.
+
 ```sh
 # Extract a top-level key from JSON
 MY_DB_PASSWORD=arn:aws:secretsmanager:$AWS_REGION:$AWS_ACCOUNT_ID:secret:mydbpassword-cdma3$password

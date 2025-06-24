@@ -220,6 +220,24 @@ func TestSecretsProvider_ResolveSecrets(t *testing.T) {
 				return &sp
 			},
 		},
+		{
+			name: "only first occurrence of separator is used",
+			vars: []string{
+				"test-secret=arn:aws:secretsmanager:multi$level$key",
+			},
+			want: []string{
+				"test-secret=the-value-for-level$key",
+			},
+			mockServiceProvider: func(mockSM *mocks.SecretsManagerAPI, mockSSM *mocks.SSMAPI) secrets.Provider {
+				sp := SecretsProvider{sm: mockSM, ssm: mockSSM}
+				secretName := "arn:aws:secretsmanager:multi"
+				secretValue := "{\"level$key\": \"the-value-for-level$key\"}"
+				valueInput := secretsmanager.GetSecretValueInput{SecretId: &secretName}
+				valueOutput := secretsmanager.GetSecretValueOutput{SecretString: &secretValue}
+				mockSM.On("GetSecretValue", &valueInput).Return(&valueOutput, nil)
+				return &sp
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
