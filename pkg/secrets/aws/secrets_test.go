@@ -93,6 +93,33 @@ func TestSecretsProvider_ResolveSecrets(t *testing.T) {
 			},
 		},
 		{
+			name: "get secret from from Secrets Manager json with nested key",
+			vars: []string{
+				"test-secret-1=arn:aws:secretsmanager:12345678-json-nested$password",
+				"test-secret-2=arn:aws:secretsmanager:12345678-json-nested$redis.password",
+				"test-secret-3=arn:aws:secretsmanager:12345678-json-nested$inexistent",
+			},
+			want: []string{
+				"test-secret-1=secret-password",
+				"test-secret-2=secret-redis-password",
+				"test-secret-3=arn:aws:secretsmanager:12345678-json-nested$inexistent",
+			},
+			mockServiceProvider: func(mockSM *mocks.SecretsManagerAPI, mockSSM *mocks.SSMAPI) secrets.Provider {
+				sp := SecretsProvider{sm: mockSM, ssm: mockSSM}
+				vars := map[string]string{
+					"arn:aws:secretsmanager:12345678-json-nested": "{\n  \"TEST_1\": \"test-secret-value-1\",\n  \"TEST_2\": \"test-secret-value-2\"\n, \"password\": \"secret-password\", \"redis\": {\"password\": \"secret-redis-password\"}\n}",
+				}
+				for n, v := range vars {
+					name := n
+					value := v
+					valueInput := secretsmanager.GetSecretValueInput{SecretId: &name}
+					valueOutput := secretsmanager.GetSecretValueOutput{SecretString: &value}
+					mockSM.On("GetSecretValue", &valueInput).Return(&valueOutput, nil)
+				}
+				return &sp
+			},
+		},
+		{
 			name: "no secrets",
 			vars: []string{
 				"non-secret-1=hello-1",
