@@ -136,7 +136,7 @@ func TestSecretsProvider_ResolveSecrets(t *testing.T) {
 			mockServiceProvider: func(mockSM *mocks.SecretsManagerAPI, mockSSM *mocks.SSMAPI) secrets.Provider {
 				sp := SecretsProvider{sm: mockSM, ssm: mockSSM}
 				vars := map[string]string{
-					"arn:aws:secretsmanager:12345678-json-array": "{\n  \"keys\": [\n    {\"value\": \"api-key-1-value\"},\n    {\"value\": \"api-key-2-value\"},\n    {\"value\": \"api-key-3-value\"}\n  ]\n}",
+					"arn:aws:secretsmanager:12345678-json-array": "{\n  \"keys\": [\n {\"value\": \"api-key-1-value\"},\n    {\"value\": \"api-key-2-value\"},\n    {\"value\": \"api-key-3-value\"}\n  ]\n}",
 				}
 				for n, v := range vars {
 					name := n
