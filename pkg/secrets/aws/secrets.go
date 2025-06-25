@@ -14,7 +14,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/aws/aws-sdk-go/service/ssm/ssmiface"
 	"github.com/pkg/errors" //nolint:gci
-
 	"github.com/tidwall/gjson"
 )
 
