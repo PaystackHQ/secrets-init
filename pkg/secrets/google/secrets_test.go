@@ -6,11 +6,11 @@ import (
 	"errors"
 	"testing"
 
+	secretspb "cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
+	"github.com/stretchr/testify/assert"
+
 	"secrets-init/mocks"
 	"secrets-init/pkg/secrets"
-
-	"github.com/stretchr/testify/assert"
-	secretspb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1"
 )
 
 func TestSecretsProvider_ResolveSecrets(t *testing.T) {

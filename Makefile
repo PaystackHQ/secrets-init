@@ -36,23 +36,28 @@ all: fmt lint test ; $(info $(M) building executable...) @ ## Build program bina
 
 # Release for multiple platforms
 
-.PHONY: platfrom-build
-platfrom-build: clean lint test ; $(info $(M) building binaries for multiple os/arch...) @ ## Build program binary for platforms and os
-	$(foreach GOOS, $(PLATFORMS),\
-		$(foreach GOARCH, $(ARCHITECTURES), \
-			$(shell \
-				GOPROXY=$(GOPROXY) CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) \
+.PHONY: platform-build platfrom-build
+platform-build: clean lint test ; $(info $(M) building binaries for multiple os/arch...) @ ## Build program binary for platforms and os
+	$Q set -eu; \
+	for target_os in $(PLATFORMS); do \
+		for target_arch in $(ARCHITECTURES); do \
+			GOPROXY=$(GOPROXY) CGO_ENABLED=$(CGO_ENABLED) GOOS=$$target_os GOARCH=$$target_arch \
 				$(GO) build \
 				-tags release \
-				-ldflags "$(LDFLAGS_VERSION) -X main.Platform=$(GOOS)/$(GOARCH)" \
-				-o $(BIN)/$(basename $(MODULE))-$(GOOS)-$(GOARCH) main.go || true)))
+				-ldflags "$(LDFLAGS_VERSION) -X main.Platform=$$target_os/$$target_arch" \
+				-o $(BIN)/$(basename $(MODULE))-$$target_os-$$target_arch main.go; \
+		done; \
+	done
+
+# Keep the misspelled target for existing callers.
+platfrom-build: platform-build
 
 # Tools
 
 setup-tools: setup-lint setup-gocov setup-gocov-xml setup-go2xunit setup-mockery setup-ghr
 
 setup-lint:
-	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.59.1
+	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
 setup-gocov:
 	$(GO) install github.com/axw/gocov/...
 setup-gocov-xml:
@@ -60,7 +65,7 @@ setup-gocov-xml:
 setup-go2xunit:
 	$(GO) install github.com/tebeka/go2xunit
 setup-mockery:
-	$(GO) install github.com/vektra/mockery/v2/
+	$(GO) install github.com/vektra/mockery/v3@v3.7.1
 setup-ghr:
 	$(GO) install github.com/tcnksm/ghr@v0.13.0
 
@@ -115,12 +120,8 @@ fmt: ; $(info $(M) running gofmt...) @ ## Run gofmt on all source files
 	$Q $(GO) fmt $(PKGS)
 
 .PHONY: mock
-mock: ; $(info $(M) generating mocks...) @ ## Run mockery
-	$Q $(GO) mod vendor -v
-	$Q $(GOMOCK) --name SecretsManagerAPI --dir vendor/github.com/aws/aws-sdk-go/service/secretsmanager/secretsmanageriface
-	$Q $(GOMOCK) --name SSMAPI --dir vendor/github.com/aws/aws-sdk-go/service/ssm/ssmiface
-	$Q $(GOMOCK) --name GoogleSecretsManagerAPI --dir pkg/secrets/google
-	$Q rm -rf vendor
+mock: setup-mockery ; $(info $(M) generating mocks...) @ ## Run mockery
+	$Q $(GOMOCK)
 
 # Misc
 

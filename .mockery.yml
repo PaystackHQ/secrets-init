@@ -1,0 +1,20 @@
+all: false
+dir: mocks
+filename: '{{.InterfaceName}}.go'
+force-file-write: true
+formatter: goimports
+log-level: warn
+pkgname: mocks
+structname: '{{.InterfaceName}}'
+template: testify
+packages:
+  secrets-init/pkg/secrets/aws:
+    interfaces:
+      SecretsManagerAPI:
+      SSMAPI:
+  secrets-init/pkg/secrets/google:
+    interfaces:
+      SecretsManagerAPI:
+        config:
+          filename: GoogleSecretsManagerAPI.go
+          structname: GoogleSecretsManagerAPI

@@ -7,11 +7,13 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
+	"github.com/stretchr/testify/mock"
+
 	"secrets-init/mocks"
 	"secrets-init/pkg/secrets"
-
-	"github.com/aws/aws-sdk-go/service/secretsmanager"
-	"github.com/aws/aws-sdk-go/service/ssm"
 )
 
 func TestSecretsProvider_ResolveSecrets(t *testing.T) {
@@ -36,7 +38,7 @@ func TestSecretsProvider_ResolveSecrets(t *testing.T) {
 				secretValue := "test-secret-value"
 				valueInput := secretsmanager.GetSecretValueInput{SecretId: &secretName}
 				valueOutput := secretsmanager.GetSecretValueOutput{SecretString: &secretValue}
-				mockSM.On("GetSecretValue", &valueInput).Return(&valueOutput, nil)
+				mockSM.On("GetSecretValue", mock.Anything, &valueInput).Return(&valueOutput, nil)
 				return &sp
 			},
 		},
@@ -63,7 +65,7 @@ func TestSecretsProvider_ResolveSecrets(t *testing.T) {
 					value := v
 					valueInput := secretsmanager.GetSecretValueInput{SecretId: &name}
 					valueOutput := secretsmanager.GetSecretValueOutput{SecretString: &value}
-					mockSM.On("GetSecretValue", &valueInput).Return(&valueOutput, nil)
+					mockSM.On("GetSecretValue", mock.Anything, &valueInput).Return(&valueOutput, nil)
 				}
 				return &sp
 			},
@@ -87,7 +89,7 @@ func TestSecretsProvider_ResolveSecrets(t *testing.T) {
 					value := v
 					valueInput := secretsmanager.GetSecretValueInput{SecretId: &name}
 					valueOutput := secretsmanager.GetSecretValueOutput{SecretString: &value}
-					mockSM.On("GetSecretValue", &valueInput).Return(&valueOutput, nil)
+					mockSM.On("GetSecretValue", mock.Anything, &valueInput).Return(&valueOutput, nil)
 				}
 				return &sp
 			},
@@ -114,7 +116,7 @@ func TestSecretsProvider_ResolveSecrets(t *testing.T) {
 					value := v
 					valueInput := secretsmanager.GetSecretValueInput{SecretId: &name}
 					valueOutput := secretsmanager.GetSecretValueOutput{SecretString: &value}
-					mockSM.On("GetSecretValue", &valueInput).Return(&valueOutput, nil)
+					mockSM.On("GetSecretValue", mock.Anything, &valueInput).Return(&valueOutput, nil)
 				}
 				return &sp
 			},
@@ -143,7 +145,7 @@ func TestSecretsProvider_ResolveSecrets(t *testing.T) {
 					value := v
 					valueInput := secretsmanager.GetSecretValueInput{SecretId: &name}
 					valueOutput := secretsmanager.GetSecretValueOutput{SecretString: &value}
-					mockSM.On("GetSecretValue", &valueInput).Return(&valueOutput, nil)
+					mockSM.On("GetSecretValue", mock.Anything, &valueInput).Return(&valueOutput, nil)
 				}
 				return &sp
 			},
@@ -151,10 +153,12 @@ func TestSecretsProvider_ResolveSecrets(t *testing.T) {
 		{
 			name: "no secrets",
 			vars: []string{
+				"encoded=value=with=separators",
 				"non-secret-1=hello-1",
 				"non-secret-2=hello-2",
 			},
 			want: []string{
+				"encoded=value=with=separators",
 				"non-secret-1=hello-1",
 				"non-secret-2=hello-2",
 			},
@@ -177,7 +181,24 @@ func TestSecretsProvider_ResolveSecrets(t *testing.T) {
 				sp := SecretsProvider{sm: mockSM, ssm: mockSSM}
 				secretName := "arn:aws:secretsmanager:12345678"
 				valueInput := secretsmanager.GetSecretValueInput{SecretId: &secretName}
-				mockSM.On("GetSecretValue", &valueInput).Return(nil, errors.New("test error"))
+				mockSM.On("GetSecretValue", mock.Anything, &valueInput).Return(nil, errors.New("test error"))
+				return &sp
+			},
+		},
+		{
+			name: "error getting non-string secret from Secrets Manager",
+			vars: []string{
+				"test-secret=arn:aws:secretsmanager:12345678",
+			},
+			want: []string{
+				"test-secret=arn:aws:secretsmanager:12345678",
+			},
+			wantErr: true,
+			mockServiceProvider: func(mockSM *mocks.SecretsManagerAPI, mockSSM *mocks.SSMAPI) secrets.Provider {
+				sp := SecretsProvider{sm: mockSM, ssm: mockSSM}
+				secretName := "arn:aws:secretsmanager:12345678"
+				valueInput := secretsmanager.GetSecretValueInput{SecretId: &secretName}
+				mockSM.On("GetSecretValue", mock.Anything, &valueInput).Return(&secretsmanager.GetSecretValueOutput{}, nil)
 				return &sp
 			},
 		},
@@ -195,8 +216,8 @@ func TestSecretsProvider_ResolveSecrets(t *testing.T) {
 				secretValue := "test-secret-value"
 				withDecryption := true
 				valueInput := ssm.GetParameterInput{Name: &secretName, WithDecryption: &withDecryption}
-				valueOutput := ssm.GetParameterOutput{Parameter: &ssm.Parameter{Value: &secretValue}}
-				mockSSM.On("GetParameter", &valueInput).Return(&valueOutput, nil)
+				valueOutput := ssm.GetParameterOutput{Parameter: &types.Parameter{Value: &secretValue}}
+				mockSSM.On("GetParameter", mock.Anything, &valueInput).Return(&valueOutput, nil)
 				return &sp
 			},
 		},
@@ -216,7 +237,25 @@ func TestSecretsProvider_ResolveSecrets(t *testing.T) {
 				secretName := "/secrets/test-secret"
 				withDecryption := true
 				valueInput := ssm.GetParameterInput{Name: &secretName, WithDecryption: &withDecryption}
-				mockSSM.On("GetParameter", &valueInput).Return(nil, errors.New("test error"))
+				mockSSM.On("GetParameter", mock.Anything, &valueInput).Return(nil, errors.New("test error"))
+				return &sp
+			},
+		},
+		{
+			name: "error getting empty value from SSM Parameter Store",
+			vars: []string{
+				"test-secret=arn:aws:ssm:us-east-1:12345678:parameter/secrets/test-secret",
+			},
+			want: []string{
+				"test-secret=arn:aws:ssm:us-east-1:12345678:parameter/secrets/test-secret",
+			},
+			wantErr: true,
+			mockServiceProvider: func(mockSM *mocks.SecretsManagerAPI, mockSSM *mocks.SSMAPI) secrets.Provider {
+				sp := SecretsProvider{sm: mockSM, ssm: mockSSM}
+				secretName := "/secrets/test-secret"
+				withDecryption := true
+				valueInput := ssm.GetParameterInput{Name: &secretName, WithDecryption: &withDecryption}
+				mockSSM.On("GetParameter", mock.Anything, &valueInput).Return(&ssm.GetParameterOutput{}, nil)
 				return &sp
 			},
 		},
@@ -234,7 +273,7 @@ func TestSecretsProvider_ResolveSecrets(t *testing.T) {
 				secretValue := "{\"level$key\": \"the-value-for-level$key\"}"
 				valueInput := secretsmanager.GetSecretValueInput{SecretId: &secretName}
 				valueOutput := secretsmanager.GetSecretValueOutput{SecretString: &secretValue}
-				mockSM.On("GetSecretValue", &valueInput).Return(&valueOutput, nil)
+				mockSM.On("GetSecretValue", mock.Anything, &valueInput).Return(&valueOutput, nil)
 				return &sp
 			},
 		},
