@@ -8,7 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.42.1
 	github.com/aws/aws-sdk-go-v2/config v1.32.30
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.43.1
-	github.com/aws/aws-sdk-go-v2/service/ssm v1.72.0
+	github.com/aws/aws-sdk-go-v2/service/ssm v1.71.1
 	github.com/googleapis/gax-go/v2 v2.23.0
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.9.4
@@ -60,11 +60,11 @@ require (
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
-	google.golang.org/api v0.289.0 // indirect
-	google.golang.org/genproto v0.0.0-20260715232425-e75dac1f907d // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20260715232425-e75dac1f907d // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260715232425-e75dac1f907d // indirect
-	google.golang.org/grpc v1.82.1 // indirect
+	google.golang.org/api v0.288.0 // indirect
+	google.golang.org/genproto v0.0.0-20260630182238-925bb5da69e7 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20260630182238-925bb5da69e7 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260630182238-925bb5da69e7 // indirect
+	google.golang.org/grpc v1.82.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

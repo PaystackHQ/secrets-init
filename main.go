@@ -39,7 +39,6 @@ const (
 	logFormatText = "text"
 	providerAWS   = "aws"
 	providerGCP   = "google"
-	logFieldArgs  = "args"
 )
 
 func main() {
@@ -258,9 +257,7 @@ func run(ctx context.Context, provider secrets.Provider, exitEarly, interactive 
 
 	// start the specified command
 	log.WithFields(log.Fields{
-		"command":    commandStr,
-		logFieldArgs: argsSlice,
-		"env":        cmd.Env,
+		"command": commandStr,
 	}).Debug("starting command")
 	err = cmd.Start()
 	if err != nil {
@@ -281,10 +278,9 @@ func run(ctx context.Context, provider secrets.Provider, exitEarly, interactive 
 				e := syscall.Kill(-cmd.Process.Pid, sig.(syscall.Signal))
 				if e != nil {
 					log.WithFields(log.Fields{
-						"pid":        cmd.Process.Pid,
-						"path":       cmd.Path,
-						logFieldArgs: cmd.Args,
-						"signal":     unix.SignalName(sig.(syscall.Signal)),
+						"pid":    cmd.Process.Pid,
+						"path":   cmd.Path,
+						"signal": unix.SignalName(sig.(syscall.Signal)),
 					}).WithError(e).Error("failed to send system signal to the process")
 				}
 			}

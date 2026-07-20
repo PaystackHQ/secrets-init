@@ -1,32 +1,29 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1@sha256:87999aa3d42bdc6bea60565083ee17e86d1f3339802f543c0d03998580f9cb89
 
-FROM --platform=${BUILDPLATFORM} golang:1.26.5-alpine AS builder
-# passed by buildkit
+FROM --platform=${BUILDPLATFORM} golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG VERSION=v0
-# add CA certificates and TZ for local time
-RUN apk add --no-cache ca-certificates make git
-# Create and change to the app directory.
-RUN mkdir -p /go/src/app
-WORKDIR /go/src/app
-# Retrieve application dependencies.
-# This allows the container build to reuse cached dependencies.
-# Expecting to copy go.mod and if present go.sum.
-COPY go.mod go.sum ./
-RUN --mount=type=cache,target=/go/pkg/mod go mod download
-# Copy local code to the container image.
-COPY . .
-# Build the binary.
-RUN --mount=type=cache,target=/root/.cache/go-build \
-    TARGETOS=${TARGETOS} TARGETARCH=${TARGETARCH} make VERSION=${VERSION}
+ARG BUILD_DATE=unknown
+ARG COMMIT=unknown
+ARG BRANCH=unknown
 
-# final image
-FROM busybox:1.38.0
-# copy certificates
+WORKDIR /go/src/app
+
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download && go mod verify
+
+COPY . .
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    GO=go TARGETOS=${TARGETOS} TARGETARCH=${TARGETARCH} \
+    VERSION=${VERSION} DATE=${BUILD_DATE} COMMIT=${COMMIT} BRANCH=${BRANCH} \
+    OUTPUT=/out/secrets-init ./scripts/build.sh
+
+FROM busybox:1.38.0@sha256:fd8d9aa63ba2f0982b5304e1ee8d3b90a210bc1ffb5314d980eb6962f1a9715d
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-# copy the binary to the production image from the builder stage.
-COPY --from=builder /go/src/app/.bin/secrets-init /secrets-init
+COPY --from=builder /out/secrets-init /secrets-init
 RUN adduser -D -u 1000 secrets-init
 USER 1000
 

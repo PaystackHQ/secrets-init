@@ -149,3 +149,11 @@ The [kube-secrets-init](https://github.com/doitintl/kube-secrets-init) implement
 ## Code Reference
 
 Initial init system code was copied from [go-init](https://github.com/pablo-ruth/go-init) project.
+
+## Development
+
+- `make verify` checks module integrity, formatting, lint, workflow syntax, known reachable vulnerabilities, and tests.
+- `make platform-build` runs verification and builds all release binaries.
+- `./scripts/write-checksums.sh .bin` creates the release checksum manifest.
+
+Dependency updates use the newest compatible release that is at least six days old. An immediate security fix may use a newer release when no mature patched version exists. Release verification deliberately checks the current Go vulnerability database and fails closed when a reachable vulnerability is reported.

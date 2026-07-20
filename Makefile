@@ -14,7 +14,7 @@ PLATFORMS     = darwin linux
 ARCHITECTURES = amd64 arm64
 TARGETOS   ?= $(GOOS)
 TARGETARCH ?= $(GOARCH)
-LDFLAGS_VERSION = -s -w -X main.Version=$(VERSION) -X main.BuildDate=$(DATE) -X main.GitCommit=$(COMMIT) -X main.GitBranch=$(BRANCH)
+BUILD_SCRIPT = $(CURDIR)/scripts/build.sh
 
 DOCKER  = docker
 GO      = go
@@ -28,24 +28,21 @@ export CGO_ENABLED=0
 export GOPROXY=https://proxy.golang.org
 
 .PHONY: all
-all: fmt lint test ; $(info $(M) building executable...) @ ## Build program binary
-	$Q env GOOS=$(TARGETOS) GOARCH=$(TARGETARCH) $(GO) build \
-		-tags release \
-		-ldflags "$(LDFLAGS_VERSION) -X main.Platform=$(TARGETOS)/$(TARGETARCH)" \
-		-o $(BIN)/$(basename $(MODULE)) main.go
+all: verify ; $(info $(M) building executable...) @ ## Build program binary
+	$Q env GO="$(GO)" TARGETOS="$(TARGETOS)" TARGETARCH="$(TARGETARCH)" \
+		VERSION="$(VERSION)" DATE="$(DATE)" COMMIT="$(COMMIT)" BRANCH="$(BRANCH)" \
+		OUTPUT="$(BIN)/$(basename $(MODULE))" $(BUILD_SCRIPT)
 
 # Release for multiple platforms
 
 .PHONY: platform-build platfrom-build
-platform-build: clean lint test ; $(info $(M) building binaries for multiple os/arch...) @ ## Build program binary for platforms and os
+platform-build: clean verify ; $(info $(M) building binaries for multiple os/arch...) @ ## Build program binary for platforms and os
 	$Q set -eu; \
 	for target_os in $(PLATFORMS); do \
 		for target_arch in $(ARCHITECTURES); do \
-			GOPROXY=$(GOPROXY) CGO_ENABLED=$(CGO_ENABLED) GOOS=$$target_os GOARCH=$$target_arch \
-				$(GO) build \
-				-tags release \
-				-ldflags "$(LDFLAGS_VERSION) -X main.Platform=$$target_os/$$target_arch" \
-				-o $(BIN)/$(basename $(MODULE))-$$target_os-$$target_arch main.go; \
+			env GO="$(GO)" TARGETOS="$$target_os" TARGETARCH="$$target_arch" \
+				VERSION="$(VERSION)" DATE="$(DATE)" COMMIT="$(COMMIT)" BRANCH="$(BRANCH)" \
+				OUTPUT="$(BIN)/$(basename $(MODULE))-$$target_os-$$target_arch" $(BUILD_SCRIPT); \
 		done; \
 	done
 
@@ -54,22 +51,28 @@ platfrom-build: platform-build
 
 # Tools
 
-setup-tools: setup-lint setup-gocov setup-gocov-xml setup-go2xunit setup-mockery setup-ghr
+setup-tools: setup-lint setup-vuln setup-actionlint setup-gocov setup-gocov-xml setup-go2xunit setup-mockery setup-ghr
 
 setup-lint:
 	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
+setup-vuln:
+	$(GO) install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+setup-actionlint:
+	$(GO) install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
 setup-gocov:
-	$(GO) install github.com/axw/gocov/...
+	$(GO) install github.com/axw/gocov/...@v1.2.1
 setup-gocov-xml:
-	$(GO) install github.com/AlekSi/gocov-xml
+	$(GO) install github.com/AlekSi/gocov-xml@v1.2.0
 setup-go2xunit:
-	$(GO) install github.com/tebeka/go2xunit
+	$(GO) install github.com/tebeka/go2xunit@v1.4.10
 setup-mockery:
 	$(GO) install github.com/vektra/mockery/v3@v3.7.1
 setup-ghr:
 	$(GO) install github.com/tcnksm/ghr@v0.13.0
 
 GOLINT=golangci-lint
+GOVULNCHECK=govulncheck
+ACTIONLINT=actionlint
 GOCOV=gocov
 GOCOVXML=gocov-xml
 GO2XUNIT=go2xunit
@@ -113,7 +116,24 @@ test-coverage: fmt lint test-coverage-tools ; $(info $(M) running coverage tests
 
 .PHONY: lint
 lint: setup-lint ; $(info $(M) running golangci-lint) @ ## Run golangci-lint
+	$Q $(GOLINT) fmt --diff -c $(LINT_CONFIG)
 	$Q $(GOLINT) run --timeout=5m -v -c $(LINT_CONFIG) ./...
+
+.PHONY: modules-check
+modules-check: ; $(info $(M) verifying Go modules) @ ## Verify module files and downloaded dependencies
+	$Q $(GO) mod tidy -diff
+	$Q $(GO) mod verify
+
+.PHONY: vuln
+vuln: setup-vuln ; $(info $(M) scanning for reachable vulnerabilities) @ ## Scan source dependencies for known vulnerabilities
+	$Q $(GOVULNCHECK) ./...
+
+.PHONY: workflow-lint
+workflow-lint: setup-actionlint ; $(info $(M) validating GitHub Actions workflows) @ ## Validate workflow syntax and expressions
+	$Q $(ACTIONLINT) -no-color .github/workflows/*.yaml
+
+.PHONY: verify
+verify: modules-check lint workflow-lint vuln test ## Run all source verification checks
 
 .PHONY: fmt
 fmt: ; $(info $(M) running gofmt...) @ ## Run gofmt on all source files
