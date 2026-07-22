@@ -11,14 +11,14 @@ import (
 	"runtime"
 	"syscall"
 
-	"secrets-init/pkg/secrets" //nolint:gci
-	"secrets-init/pkg/secrets/aws"
-	"secrets-init/pkg/secrets/google"
-
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	"github.com/urfave/cli/v2"
-	"golang.org/x/sys/unix" //nolint:gci
+	cli "github.com/urfave/cli/v2"
+	"golang.org/x/sys/unix"
+
+	"secrets-init/pkg/secrets"
+	"secrets-init/pkg/secrets/aws"
+	"secrets-init/pkg/secrets/google"
 )
 
 var (
@@ -34,6 +34,13 @@ var (
 	Platform = ""
 )
 
+const (
+	logFormatJSON = "json"
+	logFormatText = "text"
+	providerAWS   = "aws"
+	providerGCP   = "google"
+)
+
 func main() {
 	app := &cli.App{
 		Before: setLogFormatter,
@@ -41,13 +48,13 @@ func main() {
 			&cli.StringFlag{
 				Name:    "log-format, l",
 				Usage:   "select logrus formatter ['json', 'text']",
-				Value:   "text",
+				Value:   logFormatText,
 				EnvVars: []string{"SECRETS_INIT_LOG_FORMAT", "LOG_FORMAT"},
 			},
 			&cli.StringFlag{
 				Name:    "provider, p",
 				Usage:   "supported secrets manager provider ['aws', 'google']",
-				Value:   "aws",
+				Value:   providerAWS,
 				EnvVars: []string{"SECRETS_INIT_SECRETS_PROVIDER", "SECRETS_PROVIDER"},
 			},
 			&cli.BoolFlag{
@@ -100,7 +107,10 @@ func copyCmd(c *cli.Context) error {
 		return errors.New("must specify copy destination")
 	}
 	// full path of current executable
-	src := os.Args[0]
+	src, err := os.Executable()
+	if err != nil {
+		return errors.Wrap(err, "failed to resolve source file")
+	}
 	// destination path
 	dest := filepath.Join(c.Args().First(), filepath.Base(src))
 	// copy file with current file mode flags
@@ -142,9 +152,9 @@ func mainCmd(c *cli.Context) error {
 	// get provider
 	var provider secrets.Provider
 	var err error
-	if c.String("provider") == "aws" {
-		provider, err = aws.NewAwsSecretsProvider()
-	} else if c.String("provider") == "google" {
+	if c.String("provider") == providerAWS {
+		provider, err = aws.NewAwsSecretsProvider(ctx)
+	} else if c.String("provider") == providerGCP {
 		provider, err = google.NewGoogleSecretsProvider(ctx, c.String("google-project"))
 	}
 	if err != nil {
@@ -248,8 +258,6 @@ func run(ctx context.Context, provider secrets.Provider, exitEarly, interactive 
 	// start the specified command
 	log.WithFields(log.Fields{
 		"command": commandStr,
-		"args":    argsSlice,
-		"env":     cmd.Env,
 	}).Debug("starting command")
 	err = cmd.Start()
 	if err != nil {
@@ -272,7 +280,6 @@ func run(ctx context.Context, provider secrets.Provider, exitEarly, interactive 
 					log.WithFields(log.Fields{
 						"pid":    cmd.Process.Pid,
 						"path":   cmd.Path,
-						"args":   cmd.Args,
 						"signal": unix.SignalName(sig.(syscall.Signal)),
 					}).WithError(e).Error("failed to send system signal to the process")
 				}
@@ -284,9 +291,9 @@ func run(ctx context.Context, provider secrets.Provider, exitEarly, interactive 
 }
 
 func setLogFormatter(c *cli.Context) error {
-	if c.String("log-format") == "json" {
+	if c.String("log-format") == logFormatJSON {
 		log.SetFormatter(&log.JSONFormatter{})
-	} else if c.String("log-format") == "text" {
+	} else if c.String("log-format") == logFormatText {
 		log.SetFormatter(&log.TextFormatter{})
 	}
 	return nil

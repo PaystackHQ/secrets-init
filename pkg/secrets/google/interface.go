@@ -3,8 +3,8 @@ package google
 import (
 	"context"
 
-	"github.com/googleapis/gax-go/v2"
-	secretspb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1"
+	secretspb "cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
+	gax "github.com/googleapis/gax-go/v2"
 )
 
 // SecretsManagerAPI is the interface for the Google Secrets Manager API.

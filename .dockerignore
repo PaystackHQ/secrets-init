@@ -1,6 +1,9 @@
 # binaries
 .bin
 
+# version control
+.git
+
 # coverage
 .cover
 
@@ -20,7 +23,7 @@
 docs
 
 # customization and secrets
-.env
+.env*
 
 # license
 LICENSE

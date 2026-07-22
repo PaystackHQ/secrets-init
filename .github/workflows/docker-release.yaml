@@ -1,7 +1,6 @@
 name: docker
 
 on:
-  workflow_dispatch:
   push:
     tags:
       - '[0-9]+.[0-9]+.[0-9]+'
@@ -9,62 +8,96 @@ on:
       - 'docs/**'
       - '*.md'
 
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.26.5'
+          cache: true
+
+      - name: Verify source
+        run: make verify
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
 
       - name: Set up Docker buildx
         id: buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
 
       - name: Login to Docker Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
         with:
           registry: ${{ secrets.DOCKER_REGISTRY }}
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
-          password: ${{ secrets.CR_PAT }}
+          password: ${{ github.token }}
 
       - name: Available platforms
-        run: echo "${{ steps.buildx.outputs.platforms }}"
+        env:
+          AVAILABLE_PLATFORMS: ${{ steps.buildx.outputs.platforms }}
+        run: printf '%s\n' "$AVAILABLE_PLATFORMS"
 
       - name: Decide on image name
         id: nomenclator
         env:
           DOCKER_REPOSITORY: ${{ secrets.DOCKER_REPOSITORY }}
         run: |
-          name=${DOCKER_REPOSITORY}
-          if [ -z "$name" ]; then
-          name=${{ github.repository }}
-          fi
-          echo ::set-output name=name::${name}
-          echo ::debug::docker image name ${name}
+          set -euo pipefail
+          name="${DOCKER_REPOSITORY:-${GITHUB_REPOSITORY}}"
+          printf 'name=%s\n' "$name" >> "$GITHUB_OUTPUT"
 
-      - name: Decide on tag
+      - name: Validate release tag
         id: tagger
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          tag=$(echo "${{ github.ref }}" | sed -e 's/^refs\/heads\///g' -e 's/^refs\/tags\///g' -e 's/^refs\/pull\///g' -e 's/\/merge$//g' | sed -e 's/master/latest/g')
-          echo "::set-output name=tag::${tag}"
-          echo "::debug::docker image tag ${tag}"
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            printf 'invalid release tag: %s\n' "$RELEASE_TAG" >&2
+            exit 1
+          fi
+          printf 'tag=%s\n' "$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Read source date
+        id: source
+        env:
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: printf 'date=%s\n' "$(git show -s --format=%cI "$SOURCE_COMMIT")" >> "$GITHUB_OUTPUT"
 
       - name: Build and push Docker image
         id: build-push
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
-          build-args: VERSION=${{ steps.tagger.outputs.tag }}
+          build-args: |
+            VERSION=${{ steps.tagger.outputs.tag }}
+            BUILD_DATE=${{ steps.source.outputs.date }}
+            COMMIT=${{ github.sha }}
+            BRANCH=${{ github.ref_name }}
           platforms: linux/amd64,linux/arm64
           tags: |
             ${{ steps.nomenclator.outputs.name }}:${{ steps.tagger.outputs.tag }}
@@ -74,4 +107,6 @@ jobs:
           push: true
 
       - name: Image digest
-        run: echo "${{ steps.build-push.outputs.digest }}"
+        env:
+          IMAGE_DIGEST: ${{ steps.build-push.outputs.digest }}
+        run: printf '%s\n' "$IMAGE_DIGEST"

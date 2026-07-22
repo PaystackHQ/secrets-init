@@ -32,12 +32,57 @@ Summary:
 User can put AWS secret ARN as environment variable value. The `secrets-init` will resolve any environment value, using specified ARN, to referenced secret value.
 
 If the secret is saved as a Key/Value pair, all the keys are applied to as environment variables and passed. The environment variable passed is ignored unless it is inside the key/value pair.
+
+#### Simple Key/Value Secrets
+
 ```sh
 # environment variable passed to `secrets-init`
 MY_DB_PASSWORD=arn:aws:secretsmanager:$AWS_REGION:$AWS_ACCOUNT_ID:secret:mydbpassword-cdma3
 
 # environment variable passed to child process, resolved by `secrets-init`
 MY_DB_PASSWORD=very-secret-password
+```
+
+#### JSON Secrets with Nested Key Extraction
+
+For JSON secrets, you can extract specific nested values using the `$` syntax followed by [gjson](https://github.com/tidwall/gjson) path expressions:
+
+> **Note:** If your secret name contains multiple `$` characters, only the first `$` is used to split the secret ARN from the nested key path. For example, `arn:aws:secretsmanager:mysecret$level$key` will extract the key `level$key` from the secret named `arn:aws:secretsmanager:mysecret`.
+
+```sh
+# Extract a top-level key from JSON
+MY_DB_PASSWORD=arn:aws:secretsmanager:$AWS_REGION:$AWS_ACCOUNT_ID:secret:mydbpassword-cdma3$password
+
+# Extract a nested key from JSON
+MY_REDIS_PASSWORD=arn:aws:secretsmanager:$AWS_REGION:$AWS_ACCOUNT_ID:secret:mydbpassword-cdma3$redis.password
+
+# Extract from array elements
+MY_API_KEY=arn:aws:secretsmanager:$AWS_REGION:$AWS_ACCOUNT_ID:secret:apikeys-cdma3$keys.0.value
+
+# If the nested key doesn't exist, the original ARN is preserved
+MY_INEXISTENT_KEY=arn:aws:secretsmanager:$AWS_REGION:$AWS_ACCOUNT_ID:secret:mydbpassword-cdma3$inexistent.key
+```
+
+**Example JSON Secret:**
+```json
+{
+  "password": "secret-password",
+  "redis": {
+    "password": "secret-redis-password"
+  },
+  "keys": [
+    {"value": "api-key-1"},
+    {"value": "api-key-2"}
+  ]
+}
+```
+
+**Resulting Environment Variables:**
+```sh
+MY_DB_PASSWORD=secret-password
+MY_REDIS_PASSWORD=secret-redis-password
+MY_API_KEY=api-key-1
+MY_INEXISTENT_KEY=arn:aws:secretsmanager:us-east-1:123456789012:secret:mydbpassword-cdma3$inexistent.key
 ```
 
 ### Integration with AWS Systems Manager Parameter Store
@@ -104,3 +149,11 @@ The [kube-secrets-init](https://github.com/doitintl/kube-secrets-init) implement
 ## Code Reference
 
 Initial init system code was copied from [go-init](https://github.com/pablo-ruth/go-init) project.
+
+## Development
+
+- `make verify` checks module integrity, formatting, lint, workflow syntax, known reachable vulnerabilities, and tests.
+- `make platform-build` runs verification and builds all release binaries.
+- `./scripts/write-checksums.sh .bin` creates the release checksum manifest.
+
+Dependency updates use the newest compatible release that is at least six days old. An immediate security fix may use a newer release when no mature patched version exists. Release verification deliberately checks the current Go vulnerability database and fails closed when a reachable vulnerability is reported.

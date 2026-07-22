@@ -1,7 +1,6 @@
 name: github
 
 on:
-  workflow_dispatch:
   push:
     tags:
       - '[0-9]+.[0-9]+.[0-9]+'
@@ -9,32 +8,69 @@ on:
       - 'docs/**'
       - '*.md'
 
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
 
       - name: Install Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version: '>=1.21.0'
+          go-version: '1.26.5'
+          cache: true
 
-      - name: Cross-Platform build
+      - name: Validate release tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          make platfrom-build
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            printf 'invalid release tag: %s\n' "$RELEASE_TAG" >&2
+            exit 1
+          fi
+
+      - name: Read source date
+        id: source
+        env:
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: printf 'date=%s\n' "$(git show -s --format=%cI "$SOURCE_COMMIT")" >> "$GITHUB_OUTPUT"
+
+      - name: Cross-platform build
+        env:
+          BRANCH: ${{ github.ref_name }}
+          COMMIT: ${{ github.sha }}
+          DATE: ${{ steps.source.outputs.date }}
+          VERSION: ${{ github.ref_name }}
+        run: make platform-build
+
+      - name: Generate checksums
+        run: ./scripts/write-checksums.sh .bin
 
       - name: Build Changelog
         id: build_changelog
-        uses: mikepenz/release-changelog-builder-action@v3
+        uses: mikepenz/release-changelog-builder-action@c9bcd8238b6f41e05561348339429d360b1c0247 # v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
-          body: ${{steps.github_release.outputs.changelog}}
+          body: ${{ steps.build_changelog.outputs.changelog }}
+          fail_on_unmatched_files: true
           files: |
             .bin/*
+          overwrite_files: false
+          tag_name: ${{ github.ref_name }}

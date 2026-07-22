@@ -7,13 +7,13 @@ import (
 	"strings"
 	"sync"
 
-	"secrets-init/pkg/secrets" //nolint:gci
-
 	"cloud.google.com/go/compute/metadata"
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
+	secretspb "cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	secretspb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1" //nolint:gci
+
+	"secrets-init/pkg/secrets"
 )
 
 var fullSecretRe = regexp.MustCompile(`projects/[^/]+/secrets/[^/+](/version/[^/+])?`)
@@ -37,7 +37,7 @@ func NewGoogleSecretsProvider(ctx context.Context, projectID string) (secrets.Pr
 	if projectID != "" {
 		sp.projectID = projectID
 	} else {
-		sp.projectID, err = metadata.ProjectID()
+		sp.projectID, err = metadata.ProjectIDWithContext(ctx)
 		if err != nil {
 			log.WithError(err).Infoln("The Google project cannot be detected, you won't be able to use the short secret version")
 		}
