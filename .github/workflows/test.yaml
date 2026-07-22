@@ -42,5 +42,11 @@ jobs:
       - name: Generate release checksums
         run: ./scripts/write-checksums.sh .bin
 
+      - name: Build container image
+        run: docker build --tag secrets-init:ci .
+
+      - name: Smoke test container image
+        run: docker run --rm secrets-init:ci --version
+
       - name: Race test
         run: make CGO_ENABLED=1 test-race
